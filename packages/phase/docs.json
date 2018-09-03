@@ -1,0 +1,10 @@
+{
+  "content": [
+    "index.ts",
+    "src/index.ts",
+    "src/phase.ts",
+    "src/phase-list.ts",
+    "src/merge-name-lists.ts"
+  ],
+  "codeSectionDepth": 4
+}
