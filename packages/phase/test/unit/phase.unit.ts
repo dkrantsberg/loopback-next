@@ -51,27 +51,27 @@ describe('Phase', () => {
         const phase = new Phase({parallel: true});
 
         phase
-          .before(mockHandler('b1'))
-          .before(mockHandler('b2'))
-          .use(mockHandler('h1'))
-          .after(mockHandler('a1'))
-          .after(mockHandler('a2'))
-          .use(mockHandler('h2'));
+          .before(mockHandler('beforeHandler_1'))
+          .before(mockHandler('beforeHandler_2'))
+          .use(mockHandler('handler_1'))
+          .after(mockHandler('afterHandler_1'))
+          .after(mockHandler('afterHandler_2'))
+          .use(mockHandler('handler_2'));
 
         await phase.run();
         expect(called).to.eql([
-          'b1',
-          'b2',
-          'b1_done',
-          'b2_done',
-          'h1',
-          'h2',
-          'h1_done',
-          'h2_done',
-          'a1',
-          'a2',
-          'a1_done',
-          'a2_done',
+          'beforeHandler_1',
+          'beforeHandler_2',
+          'beforeHandler_1_done',
+          'beforeHandler_2_done',
+          'handler_1',
+          'handler_2',
+          'handler_1_done',
+          'handler_2_done',
+          'afterHandler_1',
+          'afterHandler_2',
+          'afterHandler_1_done',
+          'afterHandler_2_done',
         ]);
       });
 
@@ -79,26 +79,26 @@ describe('Phase', () => {
         const phase = new Phase('x');
 
         phase
-          .before(mockHandler('b1'))
-          .before(mockHandler('b2'))
-          .use(mockHandler('h1'))
-          .after(mockHandler('a1'))
-          .after(mockHandler('a2'))
-          .use(mockHandler('h2'));
+          .before(mockHandler('beforeHandler_1'))
+          .before(mockHandler('beforeHandler_2'))
+          .use(mockHandler('handler_1'))
+          .after(mockHandler('afterHandler_1'))
+          .after(mockHandler('afterHandler_2'))
+          .use(mockHandler('handler_2'));
         await phase.run();
         expect(called).to.eql([
-          'b1',
-          'b1_done',
-          'b2',
-          'b2_done',
-          'h1',
-          'h1_done',
-          'h2',
-          'h2_done',
-          'a1',
-          'a1_done',
-          'a2',
-          'a2_done',
+          'beforeHandler_1',
+          'beforeHandler_1_done',
+          'beforeHandler_2',
+          'beforeHandler_2_done',
+          'handler_1',
+          'handler_1_done',
+          'handler_2',
+          'handler_2_done',
+          'afterHandler_1',
+          'afterHandler_1_done',
+          'afterHandler_2',
+          'afterHandler_2_done',
         ]);
       });
     });
@@ -121,15 +121,15 @@ describe('Phase', () => {
       const phase = new Phase('test');
       phase
         .use(async ctx => {
-          ctx!.foo = 'ba';
+          ctx.foo = 'ba';
         })
         .use(async ctx => {
-          ctx!.foo = ctx!.foo + 'r';
+          ctx.foo = ctx.foo + 'r';
         });
       phase.after(async ctx => {
-        assert(ctx!.foo === 'bar');
+        assert(ctx.foo === 'bar');
       });
-      await phase.run({});
+      await phase.run();
     });
   });
 });

@@ -1,6 +1,7 @@
 {
   "content": [
     "index.ts",
+    "src/handler.ts",
     "src/index.ts",
     "src/phase.ts",
     "src/phase-list.ts",

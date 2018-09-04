@@ -1,30 +1,71 @@
-// Copyright IBM Corp. 2014,2016. All Rights Reserved.
+// Copyright IBM Corp. 2018. All Rights Reserved.
 // Node module: loopback-phase
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
 import * as util from 'util';
-import {Phase, Handler, Context} from './phase';
+import {Handler, Context, asRunnable} from './handler';
+import {Phase} from './phase';
 import {mergePhaseNameLists as zipMerge} from './merge-name-lists';
-
+const debug = require('debug')('loopback:phase');
 /**
  * An ordered list of phases.
  */
 export class PhaseList {
-  private _phases: Phase[];
+  /**
+   * Regular phases
+   */
+  public readonly phases: Phase[];
+
+  /**
+   * The error phase will be executed when an error is thrown during the regular
+   * phases. It's similar as the `catch` clause.
+   */
+  public readonly errorPhase: Phase;
+  /**
+   * The final phase will be always executed after regular or error phases.
+   * It's similar as the `finally` clause.
+   */
+  public readonly finalPhase: Phase;
+
+  /**
+   * Mapping phases by name
+   */
   private _phaseMap: {[name: string]: Phase};
 
-  constructor() {
-    this._phases = [];
+  /**
+   * Cache for handlers
+   */
+  private _handlers: Handler[] | undefined;
+
+  public static readonly ERROR_PHASE = '$error';
+  public static readonly FINAL_PHASE = '$final';
+
+  constructor(phases: string[] = []) {
+    this.phases = [];
     this._phaseMap = {};
+    this.addAll(...phases);
+    this.errorPhase = new Phase({
+      id: PhaseList.ERROR_PHASE,
+      parallel: false,
+      failFast: false,
+    });
+    this.finalPhase = new Phase({
+      id: PhaseList.FINAL_PHASE,
+      parallel: false,
+      failFast: true,
+    });
+    this._phaseMap[this.errorPhase.id] = this.errorPhase;
+    this._phaseMap[this.finalPhase.id] = this.finalPhase;
   }
 
   /**
    * Get the first `Phase` in the list.
    *
+   * @returns The first phase.
    */
   first(): Phase {
-    return this._phases[0];
+    return this.phases[0];
   }
 
   /**
@@ -33,26 +74,34 @@ export class PhaseList {
    * @returns The last phase.
    */
   last(): Phase {
-    return this._phases[this._phases.length - 1];
+    return this.phases[this.phases.length - 1];
   }
 
   /**
    * Add one or more phases to the list.
    *
-   * @param phase The phase (or phases) to be added.
-   * @returns The added phase or phases.
+   * @param phase The phases to be added.
+   * @returns The added phases.
    */
-  add(...phases: (string | Phase)[]) {
+  addAll(...phases: (string | Phase)[]) {
     const added: Phase[] = [];
     for (const phase of phases) {
       const p = this._resolveNameAndAddToMap(phase);
       added.push(p);
-      this._phases.push(p);
+      this.phases.push(p);
     }
-    return added.length === 1 ? added[0] : added;
+    return added;
   }
 
-  _resolveNameAndAddToMap(phaseOrName: string | Phase) {
+  /**
+   * Add one phase to the list
+   * @param phase The phase to be added
+   */
+  add(phase: string | Phase) {
+    return this.addAll(phase)[0];
+  }
+
+  private _resolveNameAndAddToMap(phaseOrName: string | Phase) {
     let phase: Phase;
 
     if (typeof phaseOrName === 'string') {
@@ -63,10 +112,6 @@ export class PhaseList {
 
     if (phase.id in this._phaseMap) {
       throw new Error(util.format('Phase "%s" already exists.', phase.id));
-    }
-
-    if (!phase.__isPhase__) {
-      throw new Error('Cannot add a non phase object to a PhaseList');
     }
 
     this._phaseMap[phase.id] = phase;
@@ -81,7 +126,7 @@ export class PhaseList {
    */
   addAt(index: number, phase: string | Phase) {
     phase = this._resolveNameAndAddToMap(phase);
-    this._phases.splice(index, 0, phase);
+    this.phases.splice(index, 0, phase);
     return phase;
   }
 
@@ -117,11 +162,10 @@ export class PhaseList {
    * Remove a `Phase` from the list.
    *
    * @param phase The phase to be removed.
-   * @returns {Phase} The removed phase.
+   * @returns The removed phase.
    */
-
   remove(phase: string | Phase) {
-    const phases = this._phases;
+    const phases = this.phases;
     const phaseMap = this._phaseMap;
     let phaseId: string;
 
@@ -134,7 +178,7 @@ export class PhaseList {
       phaseId = phase.id;
     }
 
-    if (!phase || !phase.__isPhase__) return null;
+    if (!phase) return null;
 
     phases.splice(phases.indexOf(phase), 1);
     delete this._phaseMap[phaseId];
@@ -148,9 +192,9 @@ export class PhaseList {
    *
    * **Example**
    *
-   * ```js
+   * ```ts
    * // Initial list of phases
-   * phaseList.add(['initial', 'session', 'auth', 'routes', 'files', 'final']);
+   * phaseList.addAll('initial', 'session', 'auth', 'routes', 'files', 'final');
    *
    * // zip-merge more phases
    * phaseList.zipMerge([
@@ -172,10 +216,12 @@ export class PhaseList {
     if (!names.length) return;
 
     const mergedNames = zipMerge(this.getPhaseNames(), names);
-    this._phases = mergedNames.map(function(name) {
-      const existing = this.find(name);
-      return existing ? existing : this._resolveNameAndAddToMap(name);
-    }, this);
+    const merged = mergedNames.map(name => {
+      const phase = this.find(name);
+      return phase ? phase : this._resolveNameAndAddToMap(name);
+    });
+    this.phases.splice(0, this.phases.length);
+    this.phases.push(...merged);
   }
 
   /**
@@ -197,32 +243,40 @@ export class PhaseList {
   findOrAdd(id: string): Phase {
     const phase = this.find(id);
     if (phase) return phase;
-    return this.add(id) as Phase;
+    return this.add(id);
   }
 
   /**
-   * Get the list of phases as an array of `Phase` objects.
+   * Run the handlers contained in the list phase by phase.
    *
-   * @returns {Phase[]} An array of phases.
+   * @param ctx The context of each `Phase` handler.
    */
-
-  toArray(): Phase[] {
-    return this._phases.slice(0);
-  }
-
-  /**
-   * Launch the phases contained in the list. If there are no phases
-   * in the list `process.nextTick` is called with the provided callback.
-   *
-   * @param [context] The context of each `Phase` handler.
-   */
-
-  async run(ctx?: Context) {
-    const phases = this._phases;
-
-    for (const p of phases) {
-      await p.run(ctx);
+  async run(ctx: Context = {}) {
+    const handlers: Handler[] = this.getHandlers();
+    try {
+      debug('Running regular phases');
+      await asRunnable(handlers)(ctx);
+      debug('Regular phases finished');
+    } catch (e) {
+      debug('Error caught:', e);
+      ctx.error = e;
+      debug('Running error phase');
+      await this.errorPhase.run(ctx);
+      debug('Error phase finished');
+    } finally {
+      debug('Running final phase');
+      await this.finalPhase.run(ctx);
+      debug('Final phase finished');
     }
+  }
+
+  private getHandlers() {
+    if (this._handlers) return this._handlers;
+    const handlers: Handler[] = (this._handlers = []);
+    for (const p of this.phases) {
+      handlers.push(...p.getHandlers());
+    }
+    return handlers;
   }
 
   /**
@@ -230,9 +284,7 @@ export class PhaseList {
    * @returns phaseNames
    */
   getPhaseNames(): string[] {
-    return this._phases.map(function(phase) {
-      return phase.id;
-    });
+    return this.phases.map(p => p.id);
   }
 
   /**
@@ -242,11 +294,11 @@ export class PhaseList {
    *
    * ```js
    * // register via phase.use()
-   * phaseList.registerHandler('routes', function(ctx, next) { next(); });
+   * phaseList.registerHandler('routes', async (ctx, chain) => { //... });
    * // register via phase.before()
-   * phaseList.registerHandler('auth:before', function(ctx, next) { next(); });
+   * phaseList.registerHandler('auth:before', async (ctx, chain) => { //... });
    * // register via phase.after()
-   * phaseList.registerHandler('auth:after', function(ctx, next) { next(); });
+   * phaseList.registerHandler('auth:after', async (ctx, chain) => { //... });
    * ```
    *
    * @param phaseName Name of an existing phase, optionally with

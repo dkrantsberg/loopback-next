@@ -1,18 +1,19 @@
-// Copyright IBM Corp. 2014. All Rights Reserved.
+// Copyright IBM Corp. 2018. All Rights Reserved.
 // Node module: loopback-phase
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
-// tslint:disable:no-any
-export interface Context {
-  [name: string]: any;
-}
+const debug = require('debug')('loopback:phase');
+import {Handler, asRunnable, Context, ExecutionOptions} from './handler';
 
-export type Handler = (ctx: Context) => Promise<void>;
-
-export interface PhaseOptions {
+/**
+ * Options for a phase
+ */
+export interface PhaseOptions extends ExecutionOptions {
+  /**
+   * Id or name of a phase
+   */
   id?: string;
-  parallel?: boolean;
 }
 
 /**
@@ -21,20 +22,20 @@ export interface PhaseOptions {
  * Handlers can be registered to a phase using `before()`, `use()`, or `after()`
  * so that they are placed into one of the three stages.
  *
- * ```js
- * var Phase = require('loopback-phase').Phase;
+ * ```ts
+ * import {Phase} from '@loopback/phase';
  *
  * // Create a phase without id
- * var anonymousPhase = new Phase();
+ * const anonymousPhase = new Phase();
  *
  * // Create a named phase
- * var myPhase1 = new Phase('my-phase');
+ * const myPhase1 = new Phase('my-phase');
  *
  * // Create a named phase with id & options
- * var myPhase2 = new Phase('my-phase', {parallel: true});
+ * const myPhase2 = new Phase('my-phase', {parallel: true});
  *
  * // Create a named phase with options only
- * var myPhase3 = new Phase({id: 'my-phase', parallel: true});
+ * const myPhase3 = new Phase({id: 'my-phase', parallel: true});
  *
  * ```
  */
@@ -43,15 +44,28 @@ export class Phase {
   /**
    * The name or identifier of the `Phase`.
    */
-  id: string;
+  readonly id: string;
   /**
    * options The options to configure the `Phase`
    */
-  options: PhaseOptions;
-  handlers: Handler[];
-  beforeHandlers: Handler[];
-  afterHandlers: Handler[];
-  __isPhase__: boolean;
+  readonly options: PhaseOptions;
+  /**
+   * Handlers to be invoked during the phase
+   */
+  readonly handlers: Handler[];
+  /**
+   * Handlers to be invoked before the phase
+   */
+  readonly beforeHandlers: Handler[];
+  /**
+   * Handlers to be invoked after the phase
+   */
+  readonly afterHandlers: Handler[];
+
+  /**
+   * Cache for handlers
+   */
+  private _handlers: Handler[] | undefined;
 
   /**
    * @param [id] The name or identifier of the `Phase`.
@@ -70,37 +84,44 @@ export class Phase {
     this.handlers = [];
     this.beforeHandlers = [];
     this.afterHandlers = [];
-    // Internal flag to be used instead of
-    // `instanceof Phase` which breaks
-    // when there are two instances of
-    // `require('loopback-phase')
-    this.__isPhase__ = true;
+  }
+
+  /**
+   * Wrap the handler function to add `description` for debugging
+   * @param handler
+   * @param subphase
+   * @param index
+   */
+  private wrap(handler: Handler, subphase: string, index?: number): Handler {
+    let fn = handler;
+    if (debug.enabled) {
+      fn = (ctx, chain) => handler(ctx, chain);
+      const name = handler.name ? `: ${handler.name}` : '';
+      const pos = index == null ? '' : index;
+      const suffix = subphase ? `:${subphase}` : '';
+      fn.description = `${this.id}${suffix}[${pos}]${name}`;
+    }
+    return fn;
   }
 
   /**
    * Register a phase handler. The handler will be executed
-   * once the phase is launched. Handlers must callback once
-   * complete. If the handler calls back with an error, the phase will immediately
-   * halt execution and call the callback provided to
-   * `phase.run(callback)`.
+   * once the phase is launched. Handlers return a promise.
    *
    * **Example**
    *
    * ```js
-   * phase.use(function(ctx, next) {
-   *   // specify an error if one occurred...
-   *   var err = null;
+   * phase.use(ctx => {
    *   console.log(ctx.message, 'world!'); // => hello world
-   *   next(err);
    * });
    *
-   * phase.run({message: 'hello'}, function(err) {
-   *   if(err) return console.error('phase has errored', err);
-   *   console.log('phase has finished');
-   * });
+   * await phase.run({message: 'hello'});
+   * console.log('phase has finished');
+   *
    * ```
    */
   use(handler: Handler): this {
+    this._handlers = undefined;
     this.handlers.push(handler);
     return this;
   }
@@ -128,34 +149,36 @@ export class Phase {
   }
 
   /**
-   * Begin the execution of a phase and its handlers. Provide
-   * a context object to be passed as the first argument for each handler
-   * function.
-   *
-   * The handlers are executed in serial stage by stage: beforeHandlers, handlers,
-   * and afterHandlers. Handlers within the same stage are executed in serial by
-   * default and in parallel only if the options.parallel is true,
-   *
-   * @param [context] The scope applied to each handler function.
+   * Execute all handlers within the phase
+   * @param ctx
    */
   async run(ctx: Context = {}) {
-    await this.runHandlers(ctx, this.beforeHandlers);
-    await this.runHandlers(ctx, this.handlers);
-    await this.runHandlers(ctx, this.afterHandlers);
+    await asRunnable(this.getHandlers(), {
+      parallel: false, // Parallel does not go beyond subphases
+      failFast: this.options.failFast,
+    })(ctx);
   }
 
-  private async runHandlers(ctx: Context, handlers: Handler[]) {
-    const tasks: Promise<void>[] = [];
-    for (const h of handlers) {
-      if (this.options.parallel) {
-        tasks.push(h(ctx));
-      } else {
-        await h(ctx);
-      }
-    }
+  /**
+   * Get a list of handlers
+   */
+  getHandlers(): Handler[] {
+    if (this._handlers) return this._handlers;
+    const handlers: Handler[] = (this._handlers = []);
     if (this.options.parallel) {
-      await Promise.all(tasks);
+      handlers.push(
+        this.wrap(asRunnable(this.beforeHandlers, this.options), 'before', 0),
+        this.wrap(asRunnable(this.handlers, this.options), '', 0),
+        this.wrap(asRunnable(this.afterHandlers, this.options), 'after', 0),
+      );
+    } else {
+      handlers.push(
+        ...this.beforeHandlers.map((h, i) => this.wrap(h, 'before', i)),
+        ...this.handlers.map((h, i) => this.wrap(h, '', i)),
+        ...this.afterHandlers.map((h, i) => this.wrap(h, 'after', i)),
+      );
     }
+    return handlers;
   }
 
   /**

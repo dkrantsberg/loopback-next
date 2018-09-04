@@ -9,7 +9,7 @@ import {expect} from '@loopback/testlab';
 describe('PhaseList', () => {
   let phaseList: PhaseList;
 
-  beforeEach(function createEmptyPhaseList() {
+  beforeEach(() => {
     phaseList = new PhaseList();
   });
 
@@ -31,17 +31,17 @@ describe('PhaseList', () => {
   describe('phaseList.add(phaseName)', () => {
     it('should add a phase to the list', () => {
       const phase = new Phase('myPhase');
-      phaseList.add(phase);
+      phaseList.addAll(phase);
       const result = phaseList.find('myPhase');
       expect(result).to.equal(phase);
     });
     it('should create a phase and add it to the list', () => {
-      phaseList.add('myPhase');
+      phaseList.addAll('myPhase');
       const result = phaseList.find('myPhase');
       expect(result.id).to.equal('myPhase');
     });
     it('should create and add an array oh phases', () => {
-      phaseList.add('foo', 'bar');
+      phaseList.addAll('foo', 'bar');
       const foo = phaseList.find('foo');
       const bar = phaseList.find('bar');
       expect(foo.id).to.equal('foo');
@@ -49,9 +49,9 @@ describe('PhaseList', () => {
     });
 
     it('should throw when adding an existing phase', () => {
-      phaseList.add('a-name');
+      phaseList.addAll('a-name');
       expect(() => {
-        phaseList.add('a-name');
+        phaseList.addAll('a-name');
       }).to.throw(/a-name/);
     });
   });
@@ -59,7 +59,7 @@ describe('PhaseList', () => {
   describe('phaseList.remove(phaseName)', () => {
     it('should remove a phase from the list', () => {
       const phase = new Phase('myPhase');
-      phaseList.add(phase);
+      phaseList.addAll(phase);
       const result = phaseList.find('myPhase');
       expect(result).to.equal(phase);
       phaseList.remove(phase.id);
@@ -68,7 +68,7 @@ describe('PhaseList', () => {
 
     it('should not remove any phase if phase is not in the list', () => {
       const phase = new Phase('myPhase');
-      phaseList.add('bar');
+      phaseList.addAll('bar');
       const result = phaseList.find('myPhase');
       expect(result).to.equal(null);
       const removed = phaseList.remove(phase.id);
@@ -81,9 +81,9 @@ describe('PhaseList', () => {
     it('should return the list of phases as an array', () => {
       const names = ['a', 'b'];
 
-      phaseList.add(...names);
+      phaseList.addAll(...names);
 
-      const result = phaseList.toArray().map(function(phase) {
+      const result = phaseList.phases.map(phase => {
         return phase.id;
       });
 
@@ -95,7 +95,7 @@ describe('PhaseList', () => {
     it('runs phases in the correct order', async () => {
       const called: string[] = [];
 
-      phaseList.add('one', 'two');
+      phaseList.addAll('one', 'two');
 
       phaseList.find('one').use(async ctx => {
         expect(ctx.hello).to.equal('world');
@@ -120,7 +120,7 @@ describe('PhaseList', () => {
 
   describe('phaseList.addAt', () => {
     it('adds the phase at an expected index', () => {
-      phaseList.add('start', 'end');
+      phaseList.addAll('start', 'end');
       phaseList.addAt(1, 'middle');
       expect(phaseList.getPhaseNames()).to.eql(['start', 'middle', 'end']);
     });
@@ -128,7 +128,7 @@ describe('PhaseList', () => {
 
   describe('phaseList.addAfter', () => {
     it('adds the phase at an expected position', () => {
-      phaseList.add('start', 'end');
+      phaseList.addAll('start', 'end');
       phaseList.addAfter('start', 'middle');
       phaseList.addAfter('end', 'last');
       expect(phaseList.getPhaseNames()).to.eql([
@@ -148,7 +148,7 @@ describe('PhaseList', () => {
 
   describe('phaseList.addBefore', () => {
     it('adds the phase at an expected position', () => {
-      phaseList.add('start', 'end');
+      phaseList.addAll('start', 'end');
       phaseList.addBefore('start', 'first');
       phaseList.addBefore('end', 'middle');
       expect(phaseList.getPhaseNames()).to.eql([
@@ -168,7 +168,14 @@ describe('PhaseList', () => {
 
   describe('phaseList.zipMerge(phases)', () => {
     it('merges phases preserving the order', () => {
-      phaseList.add('initial', 'session', 'auth', 'routes', 'files', 'final');
+      phaseList.addAll(
+        'initial',
+        'session',
+        'auth',
+        'routes',
+        'files',
+        'final',
+      );
       phaseList.zipMerge([
         'initial',
         'postinit',
@@ -195,7 +202,7 @@ describe('PhaseList', () => {
     });
 
     it('starts adding phases from the start', () => {
-      phaseList.add('start', 'end');
+      phaseList.addAll('start', 'end');
       phaseList.zipMerge(['first', 'end', 'last']);
       expect(phaseList.getPhaseNames()).to.eql([
         'first',
@@ -210,21 +217,107 @@ describe('PhaseList', () => {
     const NOOP_HANDLER = async (ctx: Context) => {};
 
     it('adds handler to the correct phase', () => {
-      phaseList.add('one', 'two');
+      phaseList.addAll('one', 'two');
       phaseList.registerHandler('one', NOOP_HANDLER);
       expect(phaseList.find('one').handlers).to.eql([NOOP_HANDLER]);
     });
 
     it('supports ":before" suffix', () => {
-      phaseList.add('main');
+      phaseList.addAll('main');
       phaseList.registerHandler('main:before', NOOP_HANDLER);
       expect(phaseList.find('main').beforeHandlers).to.eql([NOOP_HANDLER]);
     });
 
     it('supports ":after" suffix', () => {
-      phaseList.add('main');
+      phaseList.addAll('main');
       phaseList.registerHandler('main:after', NOOP_HANDLER);
       expect(phaseList.find('main').afterHandlers).to.eql([NOOP_HANDLER]);
+    });
+
+    it('supports error phase', () => {
+      phaseList.registerHandler(PhaseList.ERROR_PHASE, NOOP_HANDLER);
+      expect(phaseList.errorPhase.handlers).to.eql([NOOP_HANDLER]);
+    });
+
+    it('supports final phase', () => {
+      phaseList.registerHandler(PhaseList.FINAL_PHASE, NOOP_HANDLER);
+      expect(phaseList.finalPhase.handlers).to.eql([NOOP_HANDLER]);
+    });
+  });
+
+  describe('phaseList.errorPhase', () => {
+    const errors: string[] = [];
+    const handlerFactory = (name: string) => {
+      return async (ctx: Context) => {
+        errors.push(name);
+      };
+    };
+
+    beforeEach(() => {
+      errors.splice(0, errors.length);
+    });
+
+    it('executes error handlers if error', async () => {
+      phaseList.add('route').use(async ctx => {
+        throw new Error('route error');
+      });
+      phaseList.errorPhase.use(handlerFactory('foo'));
+      phaseList.errorPhase.use(handlerFactory('bar'));
+      await phaseList.run();
+      expect(errors).to.eql(['foo', 'bar']);
+    });
+
+    it('skips error handlers if not error', async () => {
+      phaseList.add('route').use(async ctx => {
+        return;
+      });
+      phaseList.errorPhase.use(handlerFactory('foo'));
+      phaseList.errorPhase.use(handlerFactory('bar'));
+      await phaseList.run();
+      expect(errors).to.eql([]);
+    });
+  });
+
+  describe('phaseList.finalPhase', () => {
+    const errors: string[] = [];
+    const finalSteps: string[] = [];
+    const handlerFactory = (name: string) => {
+      return async (ctx: Context) => {
+        errors.push(name);
+      };
+    };
+
+    beforeEach(() => {
+      errors.splice(0, errors.length);
+      finalSteps.splice(0, finalSteps.length);
+    });
+
+    it('executes final handlers after error', async () => {
+      phaseList.add('route').use(async ctx => {
+        throw new Error('route error');
+      });
+      phaseList.errorPhase.use(handlerFactory('foo'));
+      phaseList.errorPhase.use(handlerFactory('bar'));
+
+      phaseList.finalPhase.use(async (ctx: Context) => {
+        finalSteps.push('final');
+      });
+      await phaseList.run();
+      expect(finalSteps).to.eql(['final']);
+    });
+
+    it('executes final handlers without error', async () => {
+      phaseList.add('route').use(async ctx => {
+        return;
+      });
+      phaseList.errorPhase.use(handlerFactory('foo'));
+      phaseList.errorPhase.use(handlerFactory('bar'));
+
+      phaseList.finalPhase.use(async (ctx: Context) => {
+        finalSteps.push('final');
+      });
+      await phaseList.run();
+      expect(finalSteps).to.eql(['final']);
     });
   });
 });

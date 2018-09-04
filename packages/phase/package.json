@@ -1,7 +1,7 @@
 {
   "name": "@loopback/phase",
   "version": "0.1.0",
-  "description": "LoopBack's API Explorer",
+  "description": "Phase based handler chain",
   "engines": {
     "node": ">=8.9"
   },
@@ -21,11 +21,14 @@
   "author": "IBM",
   "copyright.owner": "IBM Corp.",
   "license": "MIT",
-  "dependencies": {},
+  "dependencies": {
+    "debug": "^3.1.0"
+  },
   "devDependencies": {
     "@loopback/build": "^0.7.1",
     "@loopback/dist-util": "^0.3.6",
     "@loopback/testlab": "^0.11.5",
+    "@types/debug": "0.0.30",
     "@types/node": "^10.9.4"
   },
   "keywords": [
