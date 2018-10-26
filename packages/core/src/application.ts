@@ -11,18 +11,30 @@ import {
   createBindingFromClass,
 } from '@loopback/context';
 import {Component, mountComponent} from './component';
-import {CoreBindings} from './keys';
+import {CoreBindings, CoreTags} from './keys';
+import {
+  asLifeCycleObserverBinding,
+  isLifeCycleObserverClass,
+  LifeCycleObserver,
+} from './lifecycle';
+import {LifeCycleObserverRegistry} from './lifecycle-registry';
 import {Server} from './server';
+import debugFactory = require('debug');
+const debug = debugFactory('loopback:core:application');
 
 /**
  * Application is the container for various types of artifacts, such as
  * components, servers, controllers, repositories, datasources, connectors,
  * and models.
  */
-export class Application extends Context {
+export class Application extends Context implements LifeCycleObserver {
   constructor(public options: ApplicationConfig = {}) {
-    super();
+    super('application');
 
+    // Bind the life cycle observer registry
+    this.bind(CoreBindings.LIFE_CYCLE_OBSERVER_REGISTRY)
+      .toClass(LifeCycleObserverRegistry)
+      .inScope(BindingScope.SINGLETON);
     // Bind to self to allow injection of application context in other modules.
     this.bind(CoreBindings.APPLICATION_INSTANCE).to(this);
     // Make options available to other modules as well.
@@ -46,10 +58,11 @@ export class Application extends Context {
    * ```
    */
   controller(controllerCtor: ControllerClass, name?: string): Binding {
+    debug('Adding controller %s', name || controllerCtor.name);
     const binding = createBindingFromClass(controllerCtor, {
       name,
-      namespace: 'controllers',
-      type: 'controller',
+      namespace: CoreBindings.CONTROLLERS,
+      type: CoreTags.CONTROLLER,
     });
     this.add(binding);
     return binding;
@@ -76,11 +89,14 @@ export class Application extends Context {
     ctor: Constructor<T>,
     name?: string,
   ): Binding<T> {
+    debug('Adding server %s', name || ctor.name);
     const binding = createBindingFromClass(ctor, {
       name,
       namespace: CoreBindings.SERVERS,
-      type: 'server',
-    }).inScope(BindingScope.SINGLETON);
+      type: CoreTags.SERVER,
+    })
+      .inScope(BindingScope.SINGLETON)
+      .apply(asLifeCycleObserverBinding);
     this.add(binding);
     return binding;
   }
@@ -120,7 +136,7 @@ export class Application extends Context {
    * @memberof Application
    */
   public async getServer<T extends Server>(
-    target: Constructor<T> | String,
+    target: Constructor<T> | string,
   ): Promise<T> {
     let key: string;
     // instanceof check not reliable for string.
@@ -131,43 +147,6 @@ export class Application extends Context {
       key = `${CoreBindings.SERVERS}.${ctor.name}`;
     }
     return await this.get<T>(key);
-  }
-
-  /**
-   * Start the application, and all of its registered servers.
-   *
-   * @returns {Promise}
-   * @memberof Application
-   */
-  public async start(): Promise<void> {
-    await this._forEachServer(s => s.start());
-  }
-
-  /**
-   * Stop the application instance and all of its registered servers.
-   * @returns {Promise}
-   * @memberof Application
-   */
-  public async stop(): Promise<void> {
-    await this._forEachServer(s => s.stop());
-  }
-
-  /**
-   * Helper function for iterating across all registered server components.
-   * @protected
-   * @template T
-   * @param {(s: Server) => Promise<T>} fn The function to run against all
-   * registered servers
-   * @memberof Application
-   */
-  protected async _forEachServer<T>(fn: (s: Server) => Promise<T>) {
-    const bindings = this.find(`${CoreBindings.SERVERS}.*`);
-    await Promise.all(
-      bindings.map(async binding => {
-        const server = await this.get<Server>(binding.key);
-        return await fn(server);
-      }),
-    );
   }
 
   /**
@@ -192,11 +171,15 @@ export class Application extends Context {
    * ```
    */
   public component(componentCtor: Constructor<Component>, name?: string) {
+    debug('Adding component: %s', name || componentCtor.name);
     const binding = createBindingFromClass(componentCtor, {
       name,
-      namespace: 'components',
-      type: 'component',
+      namespace: CoreBindings.COMPONENTS,
+      type: CoreTags.COMPONENT,
     }).inScope(BindingScope.SINGLETON);
+    if (isLifeCycleObserverClass(componentCtor)) {
+      binding.apply(asLifeCycleObserverBinding);
+    }
     this.add(binding);
     // Assuming components can be synchronously instantiated
     const instance = this.getSync<Component>(binding.key);
@@ -212,6 +195,27 @@ export class Application extends Context {
    */
   public setMetadata(metadata: ApplicationMetadata) {
     this.bind(CoreBindings.APPLICATION_METADATA).to(metadata);
+  }
+
+  /**
+   * Start the application, and all of its registered servers.
+   *
+   * @returns {Promise}
+   * @memberof Application
+   */
+  public async start(): Promise<void> {
+    const lifecycle = await this.get(CoreBindings.LIFE_CYCLE_OBSERVER_REGISTRY);
+    await lifecycle.start();
+  }
+
+  /**
+   * Stop the application instance and all of its registered servers.
+   * @returns {Promise}
+   * @memberof Application
+   */
+  public async stop(): Promise<void> {
+    const lifecycle = await this.get(CoreBindings.LIFE_CYCLE_OBSERVER_REGISTRY);
+    await lifecycle.stop();
   }
 }
 

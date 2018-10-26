@@ -3,15 +3,9 @@
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
+import {Binding, Context, inject, Provider} from '@loopback/context';
 import {expect} from '@loopback/testlab';
-import {Application, Server, Component, CoreBindings} from '../..';
-import {
-  Context,
-  Constructor,
-  Binding,
-  Provider,
-  inject,
-} from '@loopback/context';
+import {Application, Component, CoreBindings, CoreTags, Server} from '../..';
 
 describe('Application', () => {
   describe('controller binding', () => {
@@ -22,16 +16,20 @@ describe('Application', () => {
 
     it('binds a controller', () => {
       const binding = app.controller(MyController);
-      expect(Array.from(binding.tagNames)).to.containEql('controller');
+      expect(Array.from(binding.tagNames)).to.containEql(CoreTags.CONTROLLER);
       expect(binding.key).to.equal('controllers.MyController');
-      expect(findKeysByTag(app, 'controller')).to.containEql(binding.key);
+      expect(findKeysByTag(app, CoreTags.CONTROLLER)).to.containEql(
+        binding.key,
+      );
     });
 
     it('binds a controller with custom name', () => {
       const binding = app.controller(MyController, 'my-controller');
-      expect(Array.from(binding.tagNames)).to.containEql('controller');
+      expect(Array.from(binding.tagNames)).to.containEql(CoreTags.CONTROLLER);
       expect(binding.key).to.equal('controllers.my-controller');
-      expect(findKeysByTag(app, 'controller')).to.containEql(binding.key);
+      expect(findKeysByTag(app, CoreTags.CONTROLLER)).to.containEql(
+        binding.key,
+      );
     });
 
     function givenApp() {
@@ -48,14 +46,14 @@ describe('Application', () => {
 
     it('binds a component', () => {
       app.component(MyComponent);
-      expect(findKeysByTag(app, 'component')).to.containEql(
+      expect(findKeysByTag(app, CoreTags.COMPONENT)).to.containEql(
         'components.MyComponent',
       );
     });
 
     it('binds a component with custom name', () => {
       app.component(MyComponent, 'my-component');
-      expect(findKeysByTag(app, 'component')).to.containEql(
+      expect(findKeysByTag(app, CoreTags.COMPONENT)).to.containEql(
         'components.my-component',
       );
     });
@@ -136,7 +134,7 @@ describe('Application', () => {
     it('defaults to constructor name', async () => {
       const app = new Application();
       const binding = app.server(FakeServer);
-      expect(Array.from(binding.tagNames)).to.containEql('server');
+      expect(Array.from(binding.tagNames)).to.containEql(CoreTags.SERVER);
       const result = await app.getServer(FakeServer.name);
       expect(result.constructor.name).to.equal(FakeServer.name);
     });
@@ -152,8 +150,8 @@ describe('Application', () => {
     it('allows binding of multiple servers as an array', async () => {
       const app = new Application();
       const bindings = app.servers([FakeServer, AnotherServer]);
-      expect(Array.from(bindings[0].tagNames)).to.containEql('server');
-      expect(Array.from(bindings[1].tagNames)).to.containEql('server');
+      expect(Array.from(bindings[0].tagNames)).to.containEql(CoreTags.SERVER);
+      expect(Array.from(bindings[1].tagNames)).to.containEql(CoreTags.SERVER);
       const fakeResult = await app.getServer(FakeServer);
       expect(fakeResult.constructor.name).to.equal(FakeServer.name);
       const AnotherResult = await app.getServer(AnotherServer);
@@ -161,45 +159,10 @@ describe('Application', () => {
     });
   });
 
-  describe('start', () => {
-    it('starts all injected servers', async () => {
-      const app = new Application();
-      app.component(FakeComponent);
-
-      await app.start();
-      const server = await app.getServer(FakeServer);
-      expect(server).to.not.be.null();
-      expect(server.listening).to.equal(true);
-      await app.stop();
-    });
-
-    it('does not attempt to start poorly named bindings', async () => {
-      const app = new Application();
-      app.component(FakeComponent);
-
-      // The app.start should not attempt to start this binding.
-      app.bind('controllers.servers').to({});
-      await app.start();
-      await app.stop();
-    });
-  });
-
   function findKeysByTag(ctx: Context, tag: string | RegExp) {
     return ctx.findByTag(tag).map(binding => binding.key);
   }
 });
-
-class FakeComponent implements Component {
-  servers: {
-    [name: string]: Constructor<Server>;
-  };
-  constructor() {
-    this.servers = {
-      FakeServer,
-      FakeServer2: FakeServer,
-    };
-  }
-}
 
 class FakeServer extends Context implements Server {
   listening: boolean = false;
