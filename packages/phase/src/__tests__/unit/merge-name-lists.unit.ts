@@ -3,7 +3,7 @@
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
-import {mergePhaseNameLists} from '../../src/merge-name-lists';
+import {mergePhaseNameLists} from '../../merge-name-lists';
 import {expect} from '@loopback/testlab';
 
 describe('mergePhaseNameLists', () => {

@@ -4,8 +4,7 @@
 // License text available at https://opensource.org/licenses/MIT
 
 import {expect} from '@loopback/testlab';
-import {asRunnable} from '../../';
-import {HandlerChain} from '../../src';
+import {asRunnable, HandlerChain} from '../..';
 
 describe('Handler', () => {
   describe('asRunnable()', () => {

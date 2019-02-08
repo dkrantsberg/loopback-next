@@ -1,6 +1,6 @@
 {
   "name": "@loopback/phase",
-  "version": "0.1.0",
+  "version": "1.0.0-1",
   "description": "Phase based handler chain",
   "engines": {
     "node": ">=8.9"
@@ -10,21 +10,22 @@
     "build": "lb-tsc es2017 --outDir dist",
     "clean": "lb-clean loopback-phase*.tgz dist* package api-docs",
     "pretest": "npm run build",
-    "integration": "lb-mocha \"dist/test/integration/**/*.js\"",
-    "test": "lb-mocha \"dist/test/unit/**/*.js\" \"dist/test/integration/**/*.js\"",
-    "unit": "lb-mocha \"dist/test/unit/**/*.js\"",
+    "integration": "lb-mocha \"dist/__tests__/integration/**/*.js\"",
+    "test": "lb-mocha \"dist/__tests__/**/*.js\"",
+    "unit": "lb-mocha \"dist/__tests__/unit/**/*.js\"",
     "verify": "npm pack && tar xf loopback-phase*.tgz && tree package && npm run clean"
   },
   "author": "IBM",
   "copyright.owner": "IBM Corp.",
   "license": "MIT",
   "dependencies": {
-    "debug": "^4.1.0"
+    "debug": "^4.1.1"
   },
   "devDependencies": {
-    "@loopback/build": "^1.0.0",
-    "@loopback/testlab": "^1.0.0",
-    "@types/debug": "0.0.31",
+    "@loopback/build": "^1.2.1",
+    "@loopback/testlab": "^1.0.5",
+    "@loopback/tslint-config": "^2.0.0",
+    "@types/debug": "^4.1.0",
     "@types/node": "^10.9.4"
   },
   "keywords": [

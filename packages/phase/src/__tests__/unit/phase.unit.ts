@@ -3,10 +3,9 @@
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
-import * as assert from 'assert';
 import {expect} from '@loopback/testlab';
-import {Phase} from '../..';
-import {Handler} from '../../src';
+import * as assert from 'assert';
+import {Handler, Phase} from '../..';
 
 describe('Phase', () => {
   describe('phase.run(ctx)', () => {

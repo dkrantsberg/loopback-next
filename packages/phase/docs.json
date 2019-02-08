@@ -1,11 +1,6 @@
 {
   "content": [
-    "index.ts",
-    "src/handler.ts",
-    "src/index.ts",
-    "src/phase.ts",
-    "src/phase-list.ts",
-    "src/merge-name-lists.ts"
+    "src/*.ts"
   ],
   "codeSectionDepth": 4
 }
