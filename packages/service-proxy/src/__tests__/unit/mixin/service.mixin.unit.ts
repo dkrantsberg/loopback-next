@@ -3,7 +3,7 @@
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
-import {Application, Component, Provider, BindingScope} from '@loopback/core';
+import {Application, BindingScope, Component, Provider} from '@loopback/core';
 import {expect} from '@loopback/testlab';
 import {Class, ServiceMixin} from '../../../';
 
