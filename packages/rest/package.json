@@ -23,6 +23,7 @@
     "@loopback/context": "^1.6.0",
     "@loopback/core": "^1.1.7",
     "@loopback/http-server": "^1.1.7",
+    "@loopback/express-middleware": "^1.0.0-1",
     "@loopback/openapi-v3": "^1.2.3",
     "@loopback/openapi-v3-types": "^1.0.7",
     "@types/body-parser": "^1.17.0",

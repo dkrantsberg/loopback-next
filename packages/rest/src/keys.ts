@@ -3,16 +3,20 @@
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
-import {CoreBindings} from '@loopback/core';
 import {BindingKey, Context} from '@loopback/context';
-
+import {CoreBindings} from '@loopback/core';
+import {ExpressContext} from '@loopback/express-middleware';
+import {HttpProtocol} from '@loopback/http-server';
+import * as https from 'https';
 /**
  * See https://github.com/Microsoft/TypeScript/issues/26985
  */
 // import {OpenApiSpec} from '@loopback/openapi-v3-types';
 import {OpenAPIObject as OpenApiSpec} from 'openapi3-ts';
-
+import {ErrorWriterOptions} from 'strong-error-handler';
+import {BodyParser, RequestBodyParser} from './body-parsers';
 import {HttpHandler} from './http-handler';
+import {RestRouter} from './router';
 import {SequenceHandler} from './sequence';
 import {
   BindElement,
@@ -20,19 +24,13 @@ import {
   GetFromContext,
   InvokeMethod,
   LogError,
-  Request,
-  Response,
   ParseParams,
   Reject,
-  Send,
+  Request,
   RequestBodyParserOptions,
+  Response,
+  Send,
 } from './types';
-
-import {HttpProtocol} from '@loopback/http-server';
-import * as https from 'https';
-import {ErrorWriterOptions} from 'strong-error-handler';
-import {RestRouter} from './router';
-import {RequestBodyParser, BodyParser} from './body-parsers';
 
 /**
  * RestServer-specific bindings
@@ -79,6 +77,13 @@ export namespace RestBindings {
    * Internal binding key for rest router
    */
   export const ROUTER = BindingKey.create<RestRouter>('rest.router');
+
+  /**
+   * Binding key for rest express context
+   */
+  export const EXPRESS_CONTEXT = BindingKey.create<ExpressContext>(
+    'rest.express.context',
+  );
 
   /**
    * Binding key for setting and injecting Reject action's error handling

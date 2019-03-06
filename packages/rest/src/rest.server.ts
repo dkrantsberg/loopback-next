@@ -5,13 +5,14 @@
 
 import {
   Binding,
+  BindingAddress,
+  BindingScope,
   Constructor,
   Context,
   inject,
-  BindingScope,
-  BindingAddress,
 } from '@loopback/context';
 import {Application, CoreBindings, Server} from '@loopback/core';
+import {ExpressContext} from '@loopback/express-middleware';
 import {HttpServer, HttpServerOptions} from '@loopback/http-server';
 import {getControllerSpec} from '@loopback/openapi-v3';
 import {
@@ -38,11 +39,11 @@ import {
   ControllerInstance,
   ControllerRoute,
   createControllerFactoryForBinding,
+  ExternalExpressRoutes,
+  RedirectRoute,
   Route,
   RouteEntry,
   RoutingTable,
-  ExternalExpressRoutes,
-  RedirectRoute,
 } from './router';
 import {DefaultSequence, SequenceFunction, SequenceHandler} from './sequence';
 import {
@@ -51,9 +52,9 @@ import {
   ParseParams,
   Reject,
   Request,
+  RequestBodyParserOptions,
   Response,
   Send,
-  RequestBodyParserOptions,
 } from './types';
 
 const debug = debugFactory('loopback:rest:server');
@@ -218,6 +219,12 @@ export class RestServer extends Context implements Server, HttpServerLike {
     this._applyExpressSettings();
     this._requestHandler = this._expressApp;
 
+    const expressCtx = new ExpressContext(this);
+    expressCtx.setMiddlewareRegistryOptions({
+      phasesByOrder: ['cors', 'openapi-spec', 'rest'],
+    });
+    this.bind(RestBindings.EXPRESS_CONTEXT).to(expressCtx);
+
     // Allow CORS support for all endpoints so that users
     // can test with online SwaggerUI instance
     const corsOptions = this.config.cors || {
@@ -228,22 +235,33 @@ export class RestServer extends Context implements Server, HttpServerLike {
       maxAge: 86400,
       credentials: true,
     };
-    this._expressApp.use(cors(corsOptions));
+
+    expressCtx.middleware(cors(corsOptions), {phase: 'cors', name: 'cors'});
 
     // Set up endpoints for OpenAPI spec/ui
-    this._setupOpenApiSpecEndpoints();
+    this._setupOpenApiSpecEndpoints(expressCtx);
 
     // Mount our router & request handler
-    this._expressApp.use(this._basePath, (req, res, next) => {
-      this._handleHttpRequest(req, res).catch(next);
-    });
+    expressCtx.middleware(
+      (req, res, next) => {
+        this._handleHttpRequest(req, res).catch(next);
+      },
+      {
+        path: this._basePath,
+        phase: 'rest',
+        name: 'rest',
+      },
+    );
 
     // Mount our error handler
-    this._expressApp.use(
+    expressCtx.errorMiddleware(
       (err: Error, req: Request, res: Response, next: Function) => {
         this._onUnhandledError(req, res, err);
       },
+      {name: 'error'},
     );
+
+    this._expressApp.use(expressCtx.requestHandler);
   }
 
   /**
@@ -260,7 +278,7 @@ export class RestServer extends Context implements Server, HttpServerLike {
    * Mount /openapi.json, /openapi.yaml for specs and /swagger-ui, /explorer
    * to redirect to externally hosted API explorer
    */
-  protected _setupOpenApiSpecEndpoints() {
+  protected _setupOpenApiSpecEndpoints(expressCtx: ExpressContext) {
     if (this.config.openApiSpec!.disabled) return;
     // NOTE(bajtos) Regular routes are handled through Sequence.
     // IMO, this built-in endpoint should not run through a Sequence,
@@ -272,14 +290,24 @@ export class RestServer extends Context implements Server, HttpServerLike {
     const mapping = this.config.openApiSpec!.endpointMapping!;
     // Serving OpenAPI spec
     for (const p in mapping) {
-      this._expressApp.get(p, (req, res) =>
-        this._serveOpenApiSpec(req, res, mapping[p]),
+      expressCtx.middleware(
+        (req, res) => this._serveOpenApiSpec(req, res, mapping[p]),
+        {
+          path: p,
+          method: 'get',
+          phase: 'openapi-spec',
+        },
       );
     }
 
     const explorerPaths = ['/swagger-ui', '/explorer'];
-    this._expressApp.get(explorerPaths, (req, res, next) =>
-      this._redirectToSwaggerUI(req, res, next),
+    expressCtx.middleware(
+      (req, res, next) => this._redirectToSwaggerUI(req, res, next),
+      {
+        path: explorerPaths,
+        method: 'get',
+        phase: 'openapi-spec',
+      },
     );
   }
 
