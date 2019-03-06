@@ -52,6 +52,7 @@ $ lb4 app
  ◉ Enable vscode: add VSCode config files
  ◉ Enable docker: include Dockerfile and .dockerignore
  ◉ Enable repositories: include repository imports and RepositoryMixin
+ ◉ Enable services: include service-proxy imports and ServiceMixin
 (Move up and down to reveal more choices)
 ```
 
@@ -113,10 +114,10 @@ ENV HOST=0.0.0.0 PORT=3000
 In the `package.json` file, a `docker:build` command has been provided.
 
 ```
-"docker:build": "docker build -t lb4-simple-web-app .",
+"docker:build": "docker build -t lb4-simple-web-app ."
 ```
 
-Run the command :
+Run the command:
 
 ```
 npm run docker:build
@@ -146,10 +147,10 @@ lb4-simple-web-app   latest 7d26df6c1561
 In the `package.json` file, a `docker:run` command has been provided.
 
 ```
-"docker:run": "docker run -p 3000:3000 -d lb4-simple-web-app",
+"docker:run": "docker run -p 3000:3000 -d lb4-simple-web-app"
 ```
 
-Run the command :
+Run the command:
 
 ```
 npm run docker:run
@@ -166,7 +167,7 @@ You should see something like this:
 ```
 
 CONTAINER ID   IMAGE                COMMAND          CREATED             STATUS         PORTS
-a9962339e863   lb4-simple-web-app   "node ."      8 seconds ago       Up 7 seconds   0.0.0.0:8080->8080/tcp
+a9962339e863   lb4-simple-web-app   "node ."         8 seconds ago       Up 7 seconds   0.0.0.0:3000->3000/tcp
 
 ```
 
